@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+build/
+*.py[cod]
+*.spec
+dist/*
+!dist/PhoneMouse.exe

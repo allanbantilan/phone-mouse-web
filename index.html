@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#171923">
+<title>Phone Mouse</title>
+<style>
+  :root { font: 16px system-ui, sans-serif; color: #f5f6fb; background: #171923; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100dvh; }
+  main { max-width: 700px; min-height: 100dvh; margin: auto; padding: max(18px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 14px; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  h1 { font-size: 1.1rem; margin: 0; }
+  #status { color: #aab3c8; font-size: .85rem; }
+  #pairing { flex: 1; display: grid; place-items: center; }
+  .card { width: 100%; max-width: 390px; padding: 26px; border: 1px solid #414a60; border-radius: 24px; background: #242837; }
+  .eyebrow { margin: 0 0 8px; color: #9fb9ff; font-size: .75rem; font-weight: 700; letter-spacing: .14em; }
+  h2 { margin: 0 0 10px; font-size: 1.7rem; line-height: 1.15; }
+  p { margin: 0; color: #aab3c8; line-height: 1.45; }
+  .steps { display: grid; gap: 12px; margin: 24px 0; }
+  .step { display: flex; align-items: flex-start; gap: 12px; }
+  .step b { display: grid; place-items: center; flex: none; width: 25px; height: 25px; border-radius: 50%; background: #3d4b70; color: white; font-size: .85rem; }
+  label { display: block; margin-bottom: 8px; font-weight: 600; }
+  input, button { font: inherit; min-height: 52px; border-radius: 13px; }
+  input { width: 100%; padding: 12px 16px; border: 1px solid #57617a; background: #171c2a; color: white; }
+  input:focus-visible, button:focus-visible, #pad:focus-visible { outline: 3px solid #91b2ff; outline-offset: 2px; }
+  #code { text-align: center; font-size: 1.55rem; font-weight: 700; letter-spacing: .3em; }
+  button { width: 100%; border: 0; background: #91b2ff; color: #17213a; font-weight: 700; margin-top: 12px; }
+  button:active { background: #bfd1ff; }
+  #controls { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 12px; }
+  #pad { position: relative; flex: 1; min-height: 320px; border: 1px solid #4c5368; border-radius: 25px; background: radial-gradient(circle at 50% 40%, #343d55, #242837 72%); user-select: none; touch-action: none; overflow: hidden; }
+  .pad-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; pointer-events: none; }
+  .pad-center strong { font-size: 1.15rem; }
+  .pad-center span { color: #abb6cd; font-size: .9rem; margin-top: 5px; }
+  .pad-help { position: absolute; left: 14px; right: 14px; bottom: 17px; color: #abb6cd; text-align: center; font-size: .77rem; pointer-events: none; }
+  #typing { padding: 14px; border: 1px solid #414a60; border-radius: 18px; background: #242837; }
+  #typing label { margin-bottom: 4px; }
+  #typing p { font-size: .82rem; margin-bottom: 12px; }
+  #text { min-height: 50px; }
+  #message { min-height: 1.3em; font-size: .9rem; color: #ffb5b5; }
+  [hidden] { display: none !important; }
+  @media (max-height: 680px) { #pad { min-height: 230px; } }
+</style>
+<main>
+  <header><h1>Phone Mouse</h1><span id="status" role="status">Not paired</span></header>
+  <section id="pairing">
+    <div class="card">
+      <p class="eyebrow">CONNECT TO WINDOWS</p>
+      <h2>Pair your phone</h2>
+      <p>Use the code in the Phone Mouse window on your PC.</p>
+      <div class="steps">
+        <div class="step"><b>1</b><p>Keep your PC and phone on the same Wi-Fi.</p></div>
+        <div class="step"><b>2</b><p>Enter the six-digit code shown on your PC.</p></div>
+      </div>
+      <form id="pair-form">
+        <label for="code">Pairing code</label>
+        <input id="code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="000000" required>
+        <button type="submit">Connect</button>
+      </form>
+    </div>
+  </section>
+  <section id="controls" hidden>
+    <div id="pad" role="application" aria-label="Touchpad: move with one finger, tap to left click, tap with two fingers to right click, move two fingers to scroll" tabindex="0">
+      <div class="pad-center"><strong>Touchpad</strong><span>Slide one finger to move the pointer</span></div>
+      <div class="pad-help" id="gesture-help">Tap: click · Two-finger tap: right click · Two-finger slide: scroll · Hold: drag</div>
+    </div>
+    <div id="typing">
+      <label for="text">Type on your PC</label>
+      <p>Click a text field in Windows, then type here. Text appears there instantly.</p>
+      <input id="text" type="text" placeholder="Tap to open your phone keyboard" aria-label="Type into the active Windows text field" autocomplete="off" autocapitalize="sentences" maxlength="1000">
+    </div>
+  </section>
+  <div id="message" role="alert"></div>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  let token = sessionStorage.getItem('phoneMouseToken') || '';
+  let queue = Promise.resolve(), dx = 0, dy = 0, moveTimer = null;
+
+  function setConnected(connected) {
+    $('pairing').hidden = connected;
+    $('controls').hidden = !connected;
+    $('status').textContent = connected ? 'Connected' : 'Not paired';
+  }
+
+  async function post(path, data) {
+    try {
+      const response = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+        body: JSON.stringify(data)
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Request failed');
+      $('message').textContent = '';
+      return result;
+    } catch (error) {
+      $('message').textContent = error.message;
+      if (error.message === 'Pair your phone first') {
+        token = '';
+        sessionStorage.removeItem('phoneMouseToken');
+        setConnected(false);
+      }
+      throw error;
+    }
+  }
+
+  $('pair-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    try {
+      const result = await post('/api/pair', { code: $('code').value });
+      token = result.token;
+      sessionStorage.setItem('phoneMouseToken', token);
+      setConnected(true);
+    } catch (_) { /* Error is shown above. */ }
+  });
+
+  function enqueue(data) {
+    queue = queue.then(async () => {
+      if (!token) return false;
+      try { await post('/api/input', data); return true; }
+      catch (_) { return false; }
+    });
+    return queue;
+  }
+
+  function flushMove() {
+    clearTimeout(moveTimer);
+    moveTimer = null;
+    while (dx || dy) {
+      const x = Math.max(-200, Math.min(200, dx));
+      const y = Math.max(-200, Math.min(200, dy));
+      dx -= x; dy -= y;
+      enqueue({ type: 'move', dx: x, dy: y });
+    }
+  }
+
+  function action(data) {
+    flushMove();
+    return enqueue(data);
+  }
+
+  const pad = $('pad');
+  const points = new Map();
+  let gesture = 'none', gestureStart = 0, distance = 0, scrollPixels = 0;
+  let holdTimer = null, heartbeat = null;
+
+  function releaseDrag() {
+    clearInterval(heartbeat);
+    heartbeat = null;
+    if (gesture === 'drag') action({ type: 'hold', pressed: false });
+  }
+
+  function resetGesture() {
+    clearTimeout(holdTimer);
+    holdTimer = null;
+    gesture = 'none';
+    distance = 0;
+    scrollPixels = 0;
+  }
+
+  pad.addEventListener('pointerdown', event => {
+    points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    pad.setPointerCapture(event.pointerId);
+    if (points.size === 1) {
+      gesture = 'single';
+      gestureStart = performance.now();
+      distance = 0;
+      holdTimer = setTimeout(() => {
+        if (gesture === 'single' && points.size === 1 && distance < 12) {
+          gesture = 'drag';
+          action({ type: 'hold', pressed: true });
+          heartbeat = setInterval(() => enqueue({ type: 'keepalive' }), 3000);
+        }
+      }, 450);
+    } else if (points.size === 2) {
+      releaseDrag();
+      clearTimeout(holdTimer);
+      gesture = 'two';
+      gestureStart = performance.now();
+      distance = 0;
+      scrollPixels = 0;
+    } else {
+      releaseDrag();
+      gesture = 'multi';
+    }
+  });
+
+  pad.addEventListener('pointermove', event => {
+    const point = points.get(event.pointerId);
+    if (!point) return;
+    const x = event.clientX - point.x, y = event.clientY - point.y;
+    point.x = event.clientX;
+    point.y = event.clientY;
+    if ((gesture === 'single' || gesture === 'drag') && points.size === 1) {
+      distance += Math.abs(x) + Math.abs(y);
+      if (distance >= 12) clearTimeout(holdTimer);
+      dx += Math.round(x * 1.4);
+      dy += Math.round(y * 1.4);
+      if (!moveTimer) moveTimer = setTimeout(flushMove, 25);
+    } else if (gesture === 'two' && points.size === 2) {
+      distance += Math.abs(x) + Math.abs(y);
+      scrollPixels += y / 2;
+      while (Math.abs(scrollPixels) >= 40) {
+        const direction = scrollPixels < 0 ? 1 : -1;
+        action({ type: 'scroll', direction });
+        scrollPixels += direction * 40;
+      }
+    }
+  });
+
+  function endPointer(event, canceled) {
+    if (!points.has(event.pointerId)) return;
+    points.delete(event.pointerId);
+    if (canceled) distance = Infinity;
+    if (points.size) return;
+    if (gesture === 'drag') releaseDrag();
+    else if (!canceled && gesture === 'single' && distance < 12 && performance.now() - gestureStart < 350)
+      action({ type: 'click', button: 'left' });
+    else if (!canceled && gesture === 'two' && distance < 18 && performance.now() - gestureStart < 350)
+      action({ type: 'click', button: 'right' });
+    resetGesture();
+  }
+
+  pad.addEventListener('pointerup', event => endPointer(event, false));
+  pad.addEventListener('pointercancel', event => endPointer(event, true));
+  pad.addEventListener('contextmenu', event => event.preventDefault());
+  pad.addEventListener('keydown', event => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      action({ type: 'click', button: 'left' });
+    } else if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+      event.preventDefault();
+      action({ type: 'click', button: 'right' });
+    }
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      releaseDrag();
+      points.clear();
+      resetGesture();
+    }
+  });
+
+  const typing = $('text');
+  let typed = '';
+  // shortcut: the phone field tracks up to 1,000 characters per focus, add a rolling buffer for long-form typing.
+  typing.addEventListener('focus', () => { typing.value = ''; typed = ''; });
+  function syncTyping() {
+    const oldText = Array.from(typed), newText = Array.from(typing.value);
+    let common = 0;
+    while (common < oldText.length && common < newText.length && oldText[common] === newText[common]) common++;
+    const removed = oldText.length - common, value = newText.slice(common).join('');
+    typed = typing.value;
+    if (removed || value) action({ type: 'edit', delete: removed, value }).then(ok => {
+      if (!ok) { typing.value = ''; typed = ''; }
+    });
+  }
+  typing.addEventListener('input', syncTyping);
+  typing.addEventListener('compositionend', () => queueMicrotask(syncTyping));
+  typing.addEventListener('keydown', event => {
+    if (event.isComposing) return;
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      action({ type: 'key', name: 'enter' });
+    } else if (event.key === 'Backspace' && !typing.value) {
+      event.preventDefault();
+      action({ type: 'key', name: 'backspace' });
+    }
+  });
+  setConnected(Boolean(token));
+</script>
+</html>
