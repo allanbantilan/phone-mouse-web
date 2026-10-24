@@ -36,7 +36,9 @@
   #typing { padding: 14px; border: 1px solid #414a60; border-radius: 18px; background: #242837; }
   #typing label { margin-bottom: 4px; }
   #typing p { font-size: .82rem; margin-bottom: 12px; }
-  #text { min-height: 50px; }
+  #typing-controls { display: flex; gap: 10px; }
+  #text { min-width: 0; min-height: 50px; }
+  #submit { width: auto; min-width: 105px; margin: 0; }
   #message { min-height: 1.3em; font-size: .9rem; color: #ffb5b5; }
   [hidden] { display: none !important; }
   @media (max-height: 680px) { #pad { min-height: 230px; } }
@@ -66,8 +68,11 @@
     </div>
     <div id="typing">
       <label for="text">Type on your PC</label>
-      <p>Click a text field in Windows, then type here. Text appears there instantly.</p>
-      <input id="text" type="text" placeholder="Tap to open your phone keyboard" aria-label="Type into the active Windows text field" autocomplete="off" autocapitalize="sentences" maxlength="1000">
+      <p>Click a text field in Windows, then type here. Tap Submit to press Enter.</p>
+      <div id="typing-controls">
+        <input id="text" type="text" placeholder="Phone keyboard" aria-label="Type into the active Windows text field" autocomplete="off" autocapitalize="sentences" maxlength="1000">
+        <button id="submit" type="button">Submit</button>
+      </div>
     </div>
   </section>
   <div id="message" role="alert"></div>
@@ -258,6 +263,10 @@
   }
   typing.addEventListener('input', syncTyping);
   typing.addEventListener('compositionend', () => queueMicrotask(syncTyping));
+  $('submit').addEventListener('click', () => {
+    syncTyping();
+    action({ type: 'key', name: 'enter' });
+  });
   typing.addEventListener('keydown', event => {
     if (event.isComposing) return;
     if (event.key === 'Enter') {
