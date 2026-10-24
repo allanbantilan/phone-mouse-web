@@ -2,6 +2,18 @@
 
 Control your Windows mouse from a phone browser on the same Wi-Fi network. The phone's own keyboard types text into the currently focused Windows app.
 
+[Download the Windows EXE](dist/PhoneMouse.exe)
+
+## Screenshots
+
+Windows app (`PhoneMouse.exe`):
+
+![Phone Mouse Windows app showing its URL, pairing code, and QR code](docs/screenshots/windows-app.png)
+
+Phone pairing and touchpad:
+
+<img src="docs/screenshots/phone-pairing.jpg" alt="Phone pairing screen" width="280"> <img src="docs/screenshots/phone-touchpad.jpg" alt="Phone touchpad and typing screen" width="280">
+
 ## Start the Windows app
 
 1. Open `dist/PhoneMouse.exe` on your Windows PC. No Python installation is needed to run the EXE. The app waits for an active Wi-Fi connection before showing the QR code and pairing code; it starts automatically when Wi-Fi connects.
